@@ -16,6 +16,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from .add_phase import AddPhaseError, add_phase, render_add_phase
 from .config import HarnessConfig, HarnessConfigError, load_config, read_phases_index, write_phases_index
 from .dag import DAGError, build_dag, ready_phases, blocked_or_error
 from .executor import (
@@ -37,6 +38,71 @@ from .validation import validate_discovery
 
 def cmd_status(_args, cfg: HarnessConfig) -> int:
     print(render_status(cfg))
+    return 0
+
+
+def cmd_setup_status(_args, cfg: HarnessConfig) -> int:
+    """`/harness` 의 chain gate 용 — 한 줄 머신 파서블 출력.
+
+    출력 형식 (탭 구분):
+        discovery=<pending|completed>\tui_guide=<pending|completed>\tstack=<configured|tbd>\tnext=<req-eng|ui-guide|stack-select|harness>
+
+    next 권장값:
+      - discovery 미완 → "req-eng"
+      - discovery 완료 + ui_guide 미완 → "ui-guide"
+      - 위 둘 완료 + stack 미설정 → "stack-select"
+      - 모두 만족 → "harness"
+    """
+    top = read_phases_index(cfg)
+    disc = top.get("discovery_status", "pending")
+    ui = top.get("ui_guide_status", "pending")
+    stack_state = "configured" if cfg.stack_configured else "tbd"
+    if disc != "completed":
+        nxt = "req-eng"
+    elif ui != "completed":
+        nxt = "ui-guide"
+    elif stack_state == "tbd":
+        nxt = "stack-select"
+    else:
+        nxt = "harness"
+    print(f"discovery={disc}\tui_guide={ui}\tstack={stack_state}\tnext={nxt}")
+    return 0
+
+
+def cmd_ui_guide_complete(_args, cfg: HarnessConfig) -> int:
+    """`/ui-guide` 완료 후 호출 — ui_guide_status 를 completed 로 마킹."""
+    p = cfg.target_root / "docs" / "UI_GUIDE.md"
+    if not p.exists():
+        print(f"✗ {p} 없음. /ui-guide 가 먼저 작성해야 합니다.", file=sys.stderr)
+        return 1
+    if not p.read_text(encoding="utf-8").strip():
+        print(f"✗ {p} 가 비어 있습니다. 내용 작성 후 다시 시도하세요.", file=sys.stderr)
+        return 1
+    top = read_phases_index(cfg)
+    top["ui_guide_status"] = "completed"
+    top["ui_guide_completed_at"] = _stamp()
+    write_phases_index(cfg, top)
+    print(f"✓ UI Guide completed at {top['ui_guide_completed_at']}")
+    return 0
+
+
+def cmd_ui_guide_reopen(_args, cfg: HarnessConfig) -> int:
+    """ui_guide 를 다시 pending 으로 — revision 모드에서 사용 후 다시 complete."""
+    top = read_phases_index(cfg)
+    top["ui_guide_status"] = "pending"
+    top["ui_guide_completed_at"] = None
+    write_phases_index(cfg, top)
+    print("✓ ui_guide_status 를 pending 으로 되돌렸습니다.")
+    return 0
+
+
+def cmd_discovery_reopen(_args, cfg: HarnessConfig) -> int:
+    """discovery 를 다시 pending 으로 — req-eng revision 모드 후 다시 complete."""
+    top = read_phases_index(cfg)
+    top["discovery_status"] = "pending"
+    top["discovery_completed_at"] = None
+    write_phases_index(cfg, top)
+    print("✓ discovery_status 를 pending 으로 되돌렸습니다.")
     return 0
 
 
@@ -223,6 +289,33 @@ def cmd_release_lock(args, cfg: HarnessConfig) -> int:
     return 0
 
 
+def cmd_add_phase(args, cfg: HarnessConfig) -> int:
+    """/feature 슬래시 명령이 호출. 새 phase 추가."""
+    deps = args.depends_on
+    if deps:
+        if deps == ["all_features"]:
+            deps_val: list[str] | str | None = "all_features"
+        else:
+            deps_val = list(deps)
+    else:
+        deps_val = None
+    try:
+        report = add_phase(
+            cfg,
+            dir_=args.dir,
+            kind=args.kind,
+            description=args.description or "",
+            v_model=None if args.v_model is None else bool(args.v_model),
+            depends_on=deps_val,
+            insert_before=args.insert_before,
+        )
+    except AddPhaseError as e:
+        print(f"\n  ✗ {e}\n", file=sys.stderr)
+        return 1
+    print(render_add_phase(report))
+    return 0
+
+
 def cmd_merge_gate(_args, cfg: HarnessConfig) -> int:
     """acceptance phase 진입 전 모든 feature 브랜치 merge 검증."""
     top = read_phases_index(cfg)
@@ -239,12 +332,17 @@ def cmd_merge_gate(_args, cfg: HarnessConfig) -> int:
 
 SUBCOMMANDS = {
     "status": cmd_status,
+    "setup-status": cmd_setup_status,
     "validate": cmd_validate,
     "discovery-complete": cmd_discovery_complete,
+    "discovery-reopen": cmd_discovery_reopen,
+    "ui-guide-complete": cmd_ui_guide_complete,
+    "ui-guide-reopen": cmd_ui_guide_reopen,
     "next": cmd_next,
     "worktree-plan": cmd_worktree_plan,
     "merge-gate": cmd_merge_gate,
     "set-deps": cmd_set_deps,
+    "add-phase": cmd_add_phase,
     "run": cmd_run,
     "step-complete": cmd_step_complete,
     "phase-complete": cmd_phase_complete,
@@ -264,11 +362,29 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("status", help="전체 진행 상황 출력")
+    sub.add_parser(
+        "setup-status",
+        help="setup chain 게이트용 머신 파서블 출력 (discovery=... stack=... next=...)",
+    )
     n = sub.add_parser("next", help="다음 진행 가능 phase 안내")
     n.add_argument("--run", action="store_true")
     n.add_argument("--parallel", action="store_true", help="병렬 phase 후보까지 출력 (v0.1)")
     sub.add_parser("validate", help="discovery 충실도 검사")
     sub.add_parser("discovery-complete", help="discovery_status를 completed로 마킹")
+    sub.add_parser("discovery-reopen", help="(revision 모드용) discovery_status를 pending으로 되돌림")
+    sub.add_parser("ui-guide-complete", help="ui_guide_status를 completed로 마킹 (docs/UI_GUIDE.md 필수)")
+    sub.add_parser("ui-guide-reopen", help="(revision 모드용) ui_guide_status를 pending으로 되돌림")
+
+    ap = sub.add_parser("add-phase", help="새 phase 추가 (/feature 슬래시 명령이 호출)")
+    ap.add_argument("dir", help="phase 디렉토리 이름")
+    ap.add_argument("--kind", required=True, choices=("infra", "feature", "acceptance"))
+    ap.add_argument("--description", default="", help="한 줄 설명")
+    ap.add_argument("--v-model", dest="v_model", type=lambda x: x.lower() == "true", default=None,
+                    help="true/false. 미지정 시 kind 에 따라 자동 (feature → true).")
+    ap.add_argument("--depends-on", dest="depends_on", nargs="*", default=None,
+                    help="depends_on 목록. 'all_features' 단일 인자로 acceptance 패턴 지정 가능.")
+    ap.add_argument("--insert-before", dest="insert_before", default=None,
+                    help="이 dir 앞에 삽입. 미지정 시 acceptance 직전 또는 끝.")
 
     wp = sub.add_parser("worktree-plan", help="선택 phase 들의 worktree 생성 명령 + 새 세션 안내 출력")
     wp.add_argument("phase", nargs="+", help="병렬로 분리할 phase dir 목록")

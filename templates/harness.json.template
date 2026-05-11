@@ -4,11 +4,12 @@
   "description": "<ONE_LINE_DESCRIPTION>",
 
   "stack": {
-    "language": "typescript",
-    "framework": "next",
-    "db": "supabase",
-    "deploy": "vercel",
-    "adapter": null
+    "language": null,
+    "framework": null,
+    "db": null,
+    "deploy": null,
+    "adapter": null,
+    "archetype_hint": null
   },
 
   "commands": {

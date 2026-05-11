@@ -105,12 +105,14 @@
 
 ## 2. `phases/index.json`
 
-phase 목록과 phase 간 의존성 DAG.
+phase 목록과 phase 간 의존성 DAG + project-level discovery 상태.
 
 ```json
 {
   "discovery_status": "completed",
   "discovery_completed_at": "2026-05-05T22:07:15+0900",
+  "ui_guide_status": "completed",
+  "ui_guide_completed_at": "2026-05-05T22:30:00+0900",
 
   "phases": [
     {
@@ -166,7 +168,8 @@ phase 목록과 phase 간 의존성 DAG.
 
 | 필드 | 의미 |
 |---|---|
-| `discovery_status` | `pending` / `completed`. harness.json의 `discovery.required_files` 검증 후 마킹. |
+| `discovery_status` | `pending` / `completed`. harness.json의 `discovery.required_files` 검증 후 마킹. /req-eng 가 책임. |
+| `ui_guide_status` | (v0.2) `pending` / `completed`. `docs/UI_GUIDE.md` 존재 + 비어있지 않으면 completed 가능. /ui-guide 가 책임. |
 | `phases[].dir` | phase 디렉토리 이름. `phases_dir/<dir>` 경로. unique. |
 | `phases[].name` | 표시용 이름. 보통 dir과 동일. |
 | `phases[].description` | 한 줄 설명. |
@@ -262,6 +265,25 @@ stale lock 청소 규칙:
 - 순차 진행만 가정하면 병렬 worktree dispatch 가 불가능.
 - DAG 로 모델링해야 ready set 계산 + cycle 감지 가능.
 - 명시 부담은 v0.1.1 의 `/harness-analyze-deps` (LLM 추론 + 사용자 컨펌) 으로 완화.
+
+## Setup Chain (v0.2)
+
+새 프로젝트 디스커버리 흐름. `python3 -m fullstack_harness.harness setup-status` 가 다음을 한 줄로 출력:
+
+```
+discovery=<pending|completed>\tui_guide=<pending|completed>\tstack=<configured|tbd>\tnext=<req-eng|ui-guide|stack-select|harness>
+```
+
+`/harness` 가 이 출력을 파싱해서 사용자에게 다음 명령을 안내. 상태 전이:
+
+| 상태 | next | 책임 명령 |
+|---|---|---|
+| discovery=pending | req-eng | `/req-eng` |
+| discovery=completed, ui_guide=pending | ui-guide | `/ui-guide` |
+| 위 둘 완료, stack=tbd | stack-select | `/stack-select` |
+| 모두 만족 | harness | `/harness` (정상 phase dispatch) |
+
+revision 모드는 `discovery-reopen` / `ui-guide-reopen` 으로 status 를 pending 으로 되돌린 뒤 재작성 → `discovery-complete` / `ui-guide-complete` 로 다시 마킹.
 
 ## v0.2 디자인 노트
 

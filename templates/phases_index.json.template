@@ -1,6 +1,8 @@
 {
   "discovery_status": "pending",
   "discovery_completed_at": null,
+  "ui_guide_status": "pending",
+  "ui_guide_completed_at": null,
 
   "phases": [
     {

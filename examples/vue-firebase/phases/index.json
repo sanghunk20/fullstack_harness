@@ -1,6 +1,8 @@
 {
   "discovery_status": "completed",
   "discovery_completed_at": "2026-05-12T00:00:00+0900",
+  "ui_guide_status": "completed",
+  "ui_guide_completed_at": "2026-05-12T00:00:00+0900",
 
   "phases": [
     {

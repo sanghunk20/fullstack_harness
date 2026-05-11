@@ -68,6 +68,16 @@ class HarnessConfig:
         return self.stack.get("adapter") or None
 
     @property
+    def stack_configured(self) -> bool:
+        """stack.framework + stack.db 가 모두 비어 있지 않으면 설정된 것으로 본다.
+
+        /setup 직후엔 둘 다 null → False. /stack-select 가 채우면 True.
+        """
+        fw = self.stack.get("framework")
+        db = self.stack.get("db")
+        return bool(fw) and bool(db)
+
+    @property
     def worktree_base(self) -> Path:
         base = self.raw.get("worktree", {}).get("base_path", ".worktrees")
         return self.target_root / base
