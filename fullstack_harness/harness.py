@@ -18,6 +18,16 @@ from pathlib import Path
 
 from .config import HarnessConfig, HarnessConfigError, load_config, read_phases_index, write_phases_index
 from .dag import DAGError, build_dag, ready_phases, blocked_or_error
+from .executor import (
+    ExecutorError,
+    begin_phase,
+    phase_complete,
+    release_phase_lock,
+    render_phase_complete,
+    render_step_complete,
+    render_step_guidance,
+    step_complete,
+)
 from .merge_gate import check_acceptance_gate, render_merge_gate
 from .parallel import plan_worktrees, render_parallel_summary, render_worktree_dispatch
 from .set_deps import SetDepsError, apply_deps, load_deps_input, render_report
@@ -161,6 +171,58 @@ def cmd_set_deps(args, cfg: HarnessConfig) -> int:
     return 0
 
 
+def cmd_run(args, cfg: HarnessConfig) -> int:
+    """`/harness run <phase>` — phase 의 현재 step 시작 (orchestrator only)."""
+    try:
+        g = begin_phase(
+            cfg,
+            phase_dir=args.phase,
+            step_name=args.step,
+            force_stale_lock=args.force_stale_lock,
+        )
+    except ExecutorError as e:
+        print(f"\n  ✗ {e}\n", file=sys.stderr)
+        return 1
+    print(render_step_guidance(g))
+    return 0
+
+
+def cmd_step_complete(args, cfg: HarnessConfig) -> int:
+    """`/harness step-complete <phase>` — 현재 step 완료 마킹."""
+    try:
+        result = step_complete(cfg, phase_dir=args.phase, summary=args.summary or "")
+    except ExecutorError as e:
+        print(f"\n  ✗ {e}\n", file=sys.stderr)
+        return 1
+    print(render_step_complete(result, args.phase))
+    return 0
+
+
+def cmd_phase_complete(args, cfg: HarnessConfig) -> int:
+    """`/harness phase-complete <phase>` — phase 종료 + lock 해제 + teardown 안내."""
+    try:
+        result = phase_complete(cfg, phase_dir=args.phase)
+    except ExecutorError as e:
+        print(f"\n  ✗ {e}\n", file=sys.stderr)
+        return 1
+    print(render_phase_complete(result, args.phase))
+    return 0
+
+
+def cmd_release_lock(args, cfg: HarnessConfig) -> int:
+    """`/harness release-lock <phase>` — 수동 lock 해제."""
+    try:
+        ok = release_phase_lock(cfg, phase_dir=args.phase, force=args.force)
+    except ExecutorError as e:
+        print(f"\n  ✗ {e}\n", file=sys.stderr)
+        return 1
+    if ok:
+        print(f"\n  ✓ phase '{args.phase}' lock 해제됨.\n")
+        return 0
+    print(f"\n  (phase '{args.phase}' 에 lock 없음.)\n")
+    return 0
+
+
 def cmd_merge_gate(_args, cfg: HarnessConfig) -> int:
     """acceptance phase 진입 전 모든 feature 브랜치 merge 검증."""
     top = read_phases_index(cfg)
@@ -183,6 +245,10 @@ SUBCOMMANDS = {
     "worktree-plan": cmd_worktree_plan,
     "merge-gate": cmd_merge_gate,
     "set-deps": cmd_set_deps,
+    "run": cmd_run,
+    "step-complete": cmd_step_complete,
+    "phase-complete": cmd_phase_complete,
+    "release-lock": cmd_release_lock,
 }
 
 
@@ -217,6 +283,25 @@ def main(argv: list[str] | None = None) -> int:
         "--json-file", type=str, default=None,
         help="JSON 입력 파일. 생략 시 stdin 에서 읽음.",
     )
+
+    r = sub.add_parser("run", help="phase 의 현재/지정 step 진입 (orchestrator only)")
+    r.add_argument("phase", help="phase 디렉토리 이름")
+    r.add_argument("--step", default=None, help="특정 step 이름으로 진입 (생략 시 자동)")
+    r.add_argument(
+        "--force-stale-lock", action="store_true",
+        help="lock 보유 프로세스가 죽었으면 강제 인수",
+    )
+
+    sc = sub.add_parser("step-complete", help="현재 in_progress step 을 completed 로 마킹")
+    sc.add_argument("phase", help="phase 디렉토리 이름")
+    sc.add_argument("--summary", default=None, help="step 한 줄 요약 (선택)")
+
+    pc = sub.add_parser("phase-complete", help="모든 step 완료된 phase 의 status 를 completed 로 마킹")
+    pc.add_argument("phase", help="phase 디렉토리 이름")
+
+    rl = sub.add_parser("release-lock", help="phase lock 수동 해제 (stale 시)")
+    rl.add_argument("phase", help="phase 디렉토리 이름")
+    rl.add_argument("--force", action="store_true", help="살아있는 lock 도 강제 해제")
 
     args = parser.parse_args(argv)
 

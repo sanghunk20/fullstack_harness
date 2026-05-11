@@ -1,0 +1,40 @@
+{
+  "harness_version": "0.2",
+  "project": "demo-vue-firebase",
+  "description": "Vue + Firebase fixture",
+
+  "stack": {
+    "language": "typescript",
+    "framework": "vue",
+    "db": "firebase",
+    "deploy": "firebase-hosting"
+  },
+
+  "commands": {},
+
+  "discovery": {
+    "command": "/req-eng",
+    "required_files": [
+      "docs/REQUIREMENTS.md",
+      "docs/QUALITY.md",
+      "docs/CONSTRAINTS.md"
+    ],
+    "id_prefixes": {
+      "functional": "FR",
+      "quality": "NFR",
+      "constraint": "CON"
+    }
+  },
+
+  "phases_dir": "phases",
+
+  "worktree": {
+    "base_path": ".worktrees",
+    "db_isolation": "none"
+  },
+
+  "v_model": {
+    "default": true,
+    "steps": ["spec", "design", "test-first", "implement", "integrate", "accept"]
+  }
+}

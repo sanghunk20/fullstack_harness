@@ -13,7 +13,7 @@ from typing import Any
 
 
 HARNESS_CONFIG_FILENAME = "harness.json"
-SUPPORTED_HARNESS_VERSIONS = ("0.1",)
+SUPPORTED_HARNESS_VERSIONS = ("0.1", "0.2")
 
 
 class HarnessConfigError(Exception):
@@ -59,6 +59,15 @@ class HarnessConfig:
         return self.raw.get("commands", {}) or {}
 
     @property
+    def stack(self) -> dict[str, Any]:
+        return self.raw.get("stack", {}) or {}
+
+    @property
+    def stack_adapter_name(self) -> str | None:
+        """stack.adapter 가 명시되면 그 이름. 없으면 None (자동 매칭)."""
+        return self.stack.get("adapter") or None
+
+    @property
     def worktree_base(self) -> Path:
         base = self.raw.get("worktree", {}).get("base_path", ".worktrees")
         return self.target_root / base
@@ -66,6 +75,15 @@ class HarnessConfig:
     @property
     def db_isolation(self) -> str:
         return self.raw.get("worktree", {}).get("db_isolation", "none")
+
+    @property
+    def worktree_raw(self) -> dict[str, Any]:
+        return self.raw.get("worktree", {}) or {}
+
+    @property
+    def step_gates_override(self) -> dict[str, list[str]]:
+        """harness.json.v_model.step_gates 가 있으면 adapter 의 step_gates 를 덮어씀."""
+        return self.raw.get("v_model", {}).get("step_gates", {}) or {}
 
     @property
     def v_model_default(self) -> bool:
@@ -121,6 +139,42 @@ def _validate_raw(raw: dict[str, Any], path: Path) -> None:
         )
     if not raw.get("project"):
         raise HarnessConfigError(f"{path}: 'project' 필드가 필요합니다.")
+
+
+def resolve_effective_commands(cfg: HarnessConfig) -> dict[str, str]:
+    """adapter 의 commands_defaults + harness.json.commands 를 머지.
+
+    harness.json.commands 가 우선. 빈 값(`""`) 도 명시적 disable 로 간주 (override).
+    None / 미존재 키만 adapter default 로 채움.
+    """
+    from .adapters import resolve_adapter  # 순환 회피용 지연 임포트
+
+    adapter = resolve_adapter(cfg.target_root, cfg.stack, explicit=cfg.stack_adapter_name)
+    merged: dict[str, str] = dict(adapter.commands_defaults())
+    user_cmds = cfg.commands
+    for k, v in user_cmds.items():
+        # 사용자 키가 명시되어 있으면 (값이 빈 문자열이어도) 그대로 사용.
+        merged[k] = v
+    return merged
+
+
+def resolve_effective_step_gates(cfg: HarnessConfig) -> dict[str, list[str]]:
+    """adapter.step_gates + harness.json.v_model.step_gates 머지. user override 우선."""
+    from .adapters import resolve_adapter
+
+    adapter = resolve_adapter(cfg.target_root, cfg.stack, explicit=cfg.stack_adapter_name)
+    gates: dict[str, list[str]] = {k: list(v) for k, v in adapter.step_gates().items()}
+    for k, v in cfg.step_gates_override.items():
+        if isinstance(v, list):
+            gates[k] = list(v)
+    return gates
+
+
+def resolve_adapter_name(cfg: HarnessConfig) -> str:
+    """현재 cfg 에 대해 해석되는 adapter 이름. 디버깅·status 표시용."""
+    from .adapters import resolve_adapter
+
+    return resolve_adapter(cfg.target_root, cfg.stack, explicit=cfg.stack_adapter_name).name
 
 
 def read_phases_index(cfg: HarnessConfig) -> dict[str, Any]:

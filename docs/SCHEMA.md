@@ -1,4 +1,4 @@
-# Harness Schema (v0.1)
+# Harness Schema (v0.2)
 
 대상 프로젝트가 이 harness를 사용하려면 다음 파일들이 필요하다.
 
@@ -21,7 +21,7 @@
 
 ```json
 {
-  "harness_version": "0.1",
+  "harness_version": "0.2",
   "project": "my-app",
   "description": "한 줄 프로젝트 설명",
 
@@ -29,7 +29,8 @@
     "language": "typescript",
     "framework": "next",
     "db": "supabase",
-    "deploy": "vercel"
+    "deploy": "vercel",
+    "adapter": null
   },
 
   "commands": {
@@ -41,7 +42,9 @@
     "test_integration": "npm run test:integration",
     "test_e2e": "npm run test:e2e",
     "migrate": "supabase db reset",
-    "format": "npm run format"
+    "format": "npm run format",
+    "create_schema": "psql \"$DATABASE_URL\" -c 'CREATE SCHEMA IF NOT EXISTS ${SCHEMA};'",
+    "drop_schema": "psql \"$DATABASE_URL\" -c 'DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE;'"
   },
 
   "discovery": {
@@ -62,12 +65,16 @@
 
   "worktree": {
     "base_path": ".worktrees",
-    "db_isolation": "none"
+    "db_isolation": "schema",
+    "schema_env_var": "DATABASE_SCHEMA",
+    "compose_template": null,
+    "compose_command": "docker compose"
   },
 
   "v_model": {
     "default": true,
-    "steps": ["spec", "design", "test-first", "implement", "integrate", "accept"]
+    "steps": ["spec", "design", "test-first", "implement", "integrate", "accept"],
+    "step_gates": {}
   }
 }
 ```
@@ -78,16 +85,21 @@
 |---|---|
 | `harness_version` | 이 config가 호환되는 harness 버전 (semver). harness가 mismatch 시 경고. |
 | `project` | 프로젝트 이름. UI 표시용. |
-| `stack.*` | 정보용. harness 자체는 이 값을 분기에 쓰지 않음. (사람이 빠르게 인지하기 위한 메타) |
-| `commands.*` | harness가 phase 실행 중 호출하는 외부 명령들. 모두 optional — 정의된 것만 사용. |
+| `stack.framework`, `stack.db` | tech-stack adapter 자동 매칭에 사용. 다른 필드는 정보용. |
+| `stack.adapter` | (v0.2) adapter 명시 선택. 비어 있으면 framework+db 로 자동 매칭. |
+| `commands.*` | harness가 phase 실행 중 호출하는 외부 명령들. 모두 optional — 정의된 것만 사용. `commands.create_schema`, `commands.drop_schema` 는 `db_isolation: "schema"` 시 사용 (변수: `${SCHEMA}`). |
 | `discovery.command` | discovery 단계 진입 시 사용자에게 안내할 슬래시 명령. |
 | `discovery.required_files` | discovery 완료 검증 시 존재·내용 검사할 파일 목록. |
 | `discovery.id_prefixes` | 표 첫 컬럼에서 카운트할 ID prefix. 비어 있으면 해당 카테고리 검증 skip. |
 | `phases_dir` | phase 디렉토리 루트. 기본 `phases`. |
 | `worktree.base_path` | 병렬 phase용 git worktree 생성 위치. repo 안 권장(`.worktrees`). |
-| `worktree.db_isolation` | `none` / `schema` / `compose`. v0.1은 `none`만 동작. |
+| `worktree.db_isolation` | (v0.2) `none` / `schema` / `compose`. 모두 plan 만 출력 — 사용자가 직접 실행. |
+| `worktree.schema_env_var` | (v0.2) schema 모드에서 환경변수 이름. 기본 `DATABASE_SCHEMA`. |
+| `worktree.compose_template` | (v0.2) compose 모드에서 사용할 yml 템플릿 경로. 변수: `${PHASE}`, `${PROJECT_NAME}`, `${PORT_OFFSET}` 등. |
+| `worktree.compose_command` | (v0.2) compose 호출 명령. 기본 `docker compose`. |
 | `v_model.default` | phase의 `v_model` 필드가 누락된 경우 기본값. |
 | `v_model.steps` | step 이름 순서. harness가 이 이름으로 검증. |
+| `v_model.step_gates` | (v0.2) step 별 권장 gate command 키 매핑. 비어 있으면 adapter 의 step_gates 사용. |
 
 ---
 
@@ -250,3 +262,23 @@ stale lock 청소 규칙:
 - 순차 진행만 가정하면 병렬 worktree dispatch 가 불가능.
 - DAG 로 모델링해야 ready set 계산 + cycle 감지 가능.
 - 명시 부담은 v0.1.1 의 `/harness-analyze-deps` (LLM 추론 + 사용자 컨펌) 으로 완화.
+
+## v0.2 디자인 노트
+
+### 왜 executor 를 "orchestrator only" 로?
+
+- 자동 gate 실행 + step advance 는 매력적이지만, gate 실패 시 사용자가 끼어들 지점이 모호해진다.
+- 첫 출시는 안내·상태·lock 만 책임지고 실제 작업·검증은 LLM/사용자가 하는 모델이 깨끗.
+- v0.3 에서 `--auto-advance` 같은 flag 로 자동화 모드 추가 검토.
+
+### 왜 adapter 를 module-as-plugin?
+
+- 외부 의존성 없이 stdlib `importlib` 만 사용 가능.
+- adapter 추가는 파일 1개. config / DSL 없이 Python 으로 직접 표현.
+- 사용자 어댑터는 `<target>/.harness/adapters/*.py` — repo 안 commit 안 해도 동작.
+
+### 왜 DB 격리를 "plan only" 로?
+
+- 격리 명령 (psql, docker compose) 자동 실행은 환경마다 권한·인증·side effect 가 다름.
+- harness 가 명령을 출력만 하고 사용자가 컨펌·실행하는 게 v0.2 안전 영역.
+- v0.3 에서 `--auto-isolate` flag 검토.

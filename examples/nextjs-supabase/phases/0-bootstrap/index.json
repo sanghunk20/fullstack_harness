@@ -1,0 +1,8 @@
+{
+  "name": "0-bootstrap",
+  "v_model": false,
+  "completed_at": "2026-05-12T00:00:00+0900",
+  "steps": [
+    { "step": 1, "name": "setup", "status": "completed", "summary": "Next.js project + Supabase 연결" }
+  ]
+}

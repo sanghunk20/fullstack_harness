@@ -1,0 +1,8 @@
+{
+  "name": "99-acceptance",
+  "v_model": false,
+  "completed_at": null,
+  "steps": [
+    { "step": 1, "name": "system-e2e", "status": "pending", "summary": "" }
+  ]
+}

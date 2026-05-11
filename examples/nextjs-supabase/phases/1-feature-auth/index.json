@@ -1,0 +1,13 @@
+{
+  "name": "1-feature-auth",
+  "v_model": true,
+  "completed_at": null,
+  "steps": [
+    { "step": 1, "name": "spec",       "status": "pending", "summary": "" },
+    { "step": 2, "name": "design",     "status": "pending", "summary": "" },
+    { "step": 3, "name": "test-first", "status": "pending", "summary": "" },
+    { "step": 4, "name": "implement",  "status": "pending", "summary": "" },
+    { "step": 5, "name": "integrate",  "status": "pending", "summary": "" },
+    { "step": 6, "name": "accept",     "status": "pending", "summary": "" }
+  ]
+}

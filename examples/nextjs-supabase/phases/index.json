@@ -1,0 +1,35 @@
+{
+  "discovery_status": "completed",
+  "discovery_completed_at": "2026-05-12T00:00:00+0900",
+
+  "phases": [
+    {
+      "dir": "0-bootstrap",
+      "name": "0-bootstrap",
+      "description": "Supabase + Next.js 초기 셋업",
+      "kind": "infra",
+      "v_model": false,
+      "depends_on": [],
+      "status": "completed",
+      "completed_at": "2026-05-12T00:00:00+0900"
+    },
+    {
+      "dir": "1-feature-auth",
+      "name": "1-feature-auth",
+      "description": "이메일/패스워드 인증",
+      "kind": "feature",
+      "v_model": true,
+      "depends_on": ["0-bootstrap"],
+      "status": "pending"
+    },
+    {
+      "dir": "99-acceptance",
+      "name": "99-acceptance",
+      "description": "전체 통합 E2E 평가",
+      "kind": "acceptance",
+      "v_model": false,
+      "depends_on": "all_features",
+      "status": "pending"
+    }
+  ]
+}

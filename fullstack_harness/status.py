@@ -9,6 +9,7 @@ from .config import (
     HarnessConfig,
     read_phases_index,
     read_phase_index,
+    resolve_adapter_name,
     HarnessConfigError,
 )
 from .validation import validate_discovery
@@ -56,6 +57,12 @@ def render_status(cfg: HarnessConfig) -> str:
     lines.append(f"  Harness Status — {cfg.project}")
     lines.append(f"  ({_stamp()})")
     lines.append("=" * 64)
+    try:
+        adapter_name = resolve_adapter_name(cfg)
+    except Exception:
+        adapter_name = "?"
+    iso = cfg.db_isolation or "none"
+    lines.append(f"  stack adapter: {adapter_name}    db_isolation: {iso}")
     lines.append("")
 
     # Discovery

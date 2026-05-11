@@ -1,0 +1,44 @@
+{
+  "harness_version": "0.2",
+  "project": "demo-nextjs-supabase",
+  "description": "Next.js + Supabase fixture",
+
+  "stack": {
+    "language": "typescript",
+    "framework": "next",
+    "db": "supabase",
+    "deploy": "vercel"
+  },
+
+  "commands": {
+    "create_schema": "psql \"$DATABASE_URL\" -c 'CREATE SCHEMA IF NOT EXISTS ${SCHEMA};'",
+    "drop_schema": "psql \"$DATABASE_URL\" -c 'DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE;'"
+  },
+
+  "discovery": {
+    "command": "/req-eng",
+    "required_files": [
+      "docs/REQUIREMENTS.md",
+      "docs/QUALITY.md",
+      "docs/CONSTRAINTS.md"
+    ],
+    "id_prefixes": {
+      "functional": "FR",
+      "quality": "NFR",
+      "constraint": "CON"
+    }
+  },
+
+  "phases_dir": "phases",
+
+  "worktree": {
+    "base_path": ".worktrees",
+    "db_isolation": "schema",
+    "schema_env_var": "DATABASE_SCHEMA"
+  },
+
+  "v_model": {
+    "default": true,
+    "steps": ["spec", "design", "test-first", "implement", "integrate", "accept"]
+  }
+}
