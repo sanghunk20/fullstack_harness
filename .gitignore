@@ -1,0 +1,9 @@
+# fullstack_harness 산출물 (대상 프로젝트에 install 시 생성되는 것들)
+*.lock.local
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 검증용 임시 산출물
+/tmp/
+/scratch/

@@ -1,0 +1,25 @@
+{
+  "discovery_status": "pending",
+  "discovery_completed_at": null,
+
+  "phases": [
+    {
+      "dir": "0-bootstrap",
+      "name": "0-bootstrap",
+      "description": "인프라 셋업",
+      "kind": "infra",
+      "v_model": false,
+      "depends_on": [],
+      "status": "pending"
+    },
+    {
+      "dir": "99-acceptance",
+      "name": "99-acceptance",
+      "description": "통합 시스템 평가",
+      "kind": "acceptance",
+      "v_model": false,
+      "depends_on": "all_features",
+      "status": "pending"
+    }
+  ]
+}

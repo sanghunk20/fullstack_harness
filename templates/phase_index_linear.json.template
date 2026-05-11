@@ -1,0 +1,8 @@
+{
+  "name": "<PHASE_NAME>",
+  "v_model": false,
+  "completed_at": null,
+  "steps": [
+    { "step": 1, "name": "<step_name>", "status": "pending", "summary": "" }
+  ]
+}
