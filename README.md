@@ -98,3 +98,7 @@ fullstack-harness/
 - 커밋: [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `refactor:`, `chore:`).
 
 자세한 규칙은 [AGENTS.md](AGENTS.md).
+
+## 라이선스
+
+[Apache License 2.0](LICENSE) — Copyright 2026 sanghunk.
